@@ -13,6 +13,7 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay
 )
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 def preprocess_images(image, img_size=150):
     """Downsize images"""
@@ -49,7 +50,8 @@ def load_dataset(main_folder='flowers'):
                 Y.append(flower)
     return X, Y
 
-X, Y = load_dataset()
+dataset_path = Path(__file__).resolve().parent.parent / "datasets" / "flowers"
+X, Y = load_dataset(str(dataset_path))
 
 # Split dataset 80% train, 10% validate, 10% test
 
@@ -116,9 +118,9 @@ recall = recall_score(Y_test, Y_pred, average='macro', zero_division=0)
 f1 = f1_score(Y_test, Y_pred, average='macro', zero_division=0)
 
 print(f"Accuracy: {accuracy}")
-print(f"Accuracy: {precision}")
-print(f"Accuracy: {recall}")
-print(f"Accuracy: {f1}")
+print(f"Precision: {precision}")
+print(f"Recall: {recall}")
+print(f"F1-Score: {f1}")
 
 # Plot confusion matrix
 
