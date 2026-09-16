@@ -16,6 +16,12 @@ from sklearn.metrics import (
     classification_report
 )
 
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.utils import to_categorical
+from sklearn.preprocessing import LabelEncoder
+from keras import Input
+from keras.callbacks import EarlyStopping
 
 def preprocess_images(image, img_size=256):
     """Downsize images"""
@@ -99,7 +105,6 @@ n_hidden_options = [
 ]
 
 # Test each architecture and save their scores
-
 val_scores = []
 
 for architectuure in n_hidden_options:
@@ -124,12 +129,12 @@ print(f"The best architecture is: {best_architecture}")
 print(f"Validation score of: {best_score:.2%}")
 
 best_model = MLPClassifier(
-    hidden_layer_sizes=(149,),
+    hidden_layer_sizes=(best_architecture),
     activation="relu",
     solver="adam",
     alpha=0.001,
     learning_rate_init=0.001,
-    max_iter=1000,
+    max_iter=500,
     random_state=1,
 )
 
@@ -164,4 +169,81 @@ plt.title("Confusion Matrix - Scikit-Learn MLP", fontweight="bold")
 plt.tight_layout()
 plt.show()
 
+# Convert labels to integers
+label_encoder = LabelEncoder()
+y_train_cat = to_categorical(label_encoder.fit_transform(y_train), 5)
+y_val_cat = to_categorical(label_encoder.transform(y_val), 5)
+y_test_cat = to_categorical(label_encoder.transform(y_test), 5)
 
+# Convert color histograms from list to NumPy array containing 32-bit floating-point numbers:
+x_train_col = np.asarray(x_train_col, dtype=np.float32)
+x_val_col = np.asarray(x_val_col, dtype=np.float32)
+x_test_col = np.asarray(x_test_col, dtype=np.float32)
+
+# Early stop function no sizable adjustment has been made
+early_stop = EarlyStopping(
+    monitor="val_loss",
+    patience=10,
+    restore_best_weights=True,
+)
+
+best_keras_model = None
+best_keras_score = -1
+best_keras_architecture = None
+
+for architecture in n_hidden_options:
+    keras_mlp = Sequential()
+
+    keras_mlp.add(
+        Input(shape=(x_train_col.shape[1],))
+    )
+    for neuron in architecture:
+        keras_mlp.add(
+            Dense(neuron, activation="relu")
+        )
+
+    keras_mlp.add(
+        Dense(5, activation="softmax")
+    )
+
+    keras_mlp.compile(
+        optimizer="adam",
+        loss="categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    history = keras_mlp.fit(
+        x_train_col,
+        y_train_cat,
+        validation_data=(x_val_col, y_val_cat),
+        epochs=100,
+        batch_size=32,
+        callbacks=[early_stop],
+        verbose=1,
+    )
+
+    _, val_accuracy = keras_mlp.evaluate(
+    x_val_col, y_val_cat, verbose=0
+    )
+
+    if val_accuracy > best_keras_score:
+        best_keras_score = val_accuracy
+        best_keras_model = keras_mlp
+        best_keras_architecture = architecture
+
+print(f"Best Keras architecture: {best_keras_architecture}")
+print(f"Validation accuracy: {best_keras_score:.2%}")
+
+probabilities = best_keras_model.predict(x_test_col, verbose=0)
+y_keras_pred = label_encoder.inverse_transform(
+    np.argmax(probabilities, axis=1)
+)
+
+print(f"Keras test accuracy: {accuracy_score(y_test, y_keras_pred):.2%}")
+print(classification_report(
+    y_test,
+    y_keras_pred,
+    labels=label_encoder.classes_,
+    target_names=label_encoder.classes_,
+    zero_division=0,
+))

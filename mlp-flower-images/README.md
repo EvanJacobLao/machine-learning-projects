@@ -1,8 +1,8 @@
-# Flower Classification with a Scikit-Learn MLP
+# Flower Classification with Scikit-Learn and Keras MLPs
 
-Classify flower images as **daisy, dandelion, rose, sunflower, or tulip** using color histograms and a multilayer perceptron (MLP).
+Classify flower images as **daisy, dandelion, rose, sunflower, or tulip** using color histograms and multilayer perceptrons (MLPs) implemented with scikit-learn and Keras. Both implementations share the same features and dataset split.
 
-This README covers [`flower_mlp_sklearn.py`](flower_mlp_sklearn.py).
+This README covers [`flower_mlp_sklearn_keras.py`](flower_mlp_sklearn_keras.py).
 
 ## Dataset
 
@@ -18,7 +18,7 @@ machine-learning-projects/
 │       ├── sunflower/
 │       └── tulip/
 └── mlp-flower-images/
-    ├── flower_mlp_sklearn.py
+    ├── flower_mlp_sklearn_keras.py
     └── README.md
 ```
 
@@ -29,11 +29,13 @@ Place valid image files directly inside each species folder. The current loader 
 From the repository root, with your Python virtual environment activated:
 
 ```powershell
-python -m pip install numpy opencv-python tqdm scikit-learn matplotlib
-python -u .\mlp-flower-images\flower_mlp_sklearn.py
+python -m pip install numpy opencv-python tqdm scikit-learn matplotlib tensorflow keras
+python -u .\mlp-flower-images\flower_mlp_sklearn_keras.py
 ```
 
-The script prints loading progress, split percentages, validation results, test metrics, and a classification report. It also opens a confusion-matrix plot. It does not save a trained model or the plot automatically.
+The script runs scikit-learn first, prints its metrics and classification report, and opens its confusion-matrix plot. Close that plot window to continue to Keras training. Keras then prints epoch progress, the selected architecture, validation accuracy, test accuracy, and a classification report.
+
+The current script does not plot Keras training curves or a Keras confusion matrix, and does not save models or plots automatically.
 
 If using VS Code Code Runner, clear any text selection before running, or enable `code-runner.ignoreSelection`, to execute the full file.
 
@@ -43,8 +45,9 @@ If using VS Code Code Runner, clear any text selection before running, or enable
 2. Split images into **80% training, 10% validation, and 10% test**, preserving class proportions with stratification and using `random_state=1`.
 3. Compute a joint histogram over the three BGR color channels with **6 bins per channel**, producing **216 features per image**.
 4. Min-max normalize each histogram to the range 0–1 and flatten it.
-5. Train nine candidate MLP architectures and compare validation accuracy.
-6. Train the final configured model on the training set and evaluate it on the held-out test set.
+5. Train nine scikit-learn MLP architectures and compare validation accuracy. Retrain the selected architecture with the final configured settings and evaluate it on the test set.
+6. Convert histogram features to `float32` NumPy arrays and encode flower labels as one-hot vectors for Keras.
+7. Train the same nine architectures in Keras with early stopping. Keep the trained model with the highest validation accuracy and evaluate it on the test set.
 
 The candidate hidden-layer architectures are:
 
@@ -56,23 +59,44 @@ The candidate hidden-layer architectures are:
 
 Each tuple describes the number of neurons in successive hidden layers. For example, `(149,)` means one hidden layer with 149 neurons.
 
-## Current model settings
+## Scikit-learn model settings
 
 | Setting | Architecture comparison | Final model |
 |---|---|---|
-| Hidden layers | Nine candidates above | `(149,)` |
+| Hidden layers | Nine candidates above | Selected architecture |
 | Activation | ReLU | ReLU |
 | Optimizer | Adam | Adam |
-| Maximum epochs | 500 | 1,000 |
+| Maximum epochs | 500 | 500 |
 | L2 regularization (`alpha`) | Default (`0.0001`) | `0.001` |
 | Initial learning rate | Default (`0.001`) | `0.001` |
 | Random state | 1 | 1 |
 
-**Implementation detail:** the script prints the best architecture from the comparison, but the final model is currently hardcoded to `(149,)`. It also uses different regularization and iteration settings. Consequently, the printed validation score describes the comparison model, not the final configuration. To retrain the selected configuration consistently, use `hidden_layer_sizes=best_architecture` and matching hyperparameters in both training blocks.
+**Configuration note:** the final model uses the selected architecture, but changes `alpha` from `0.0001` to `0.001`. The printed validation score therefore belongs to the search configuration, not the final retrained configuration.
 
-## Recorded results
+## Keras model settings
 
-The following results come from a recorded run, rather than a new benchmark performed for this README. The comparison selected `(149,)` with **67.59% validation accuracy**. The final model achieved:
+Each candidate is a `Sequential` model with a 216-feature input, ReLU hidden layers, and a five-neuron softmax output layer.
+
+| Setting | Value |
+|---|---|
+| Hidden layers | Same nine candidates as scikit-learn |
+| Optimizer | Adam |
+| Loss | Categorical cross-entropy |
+| Training metric | Accuracy |
+| Maximum epochs | 100 per candidate |
+| Batch size | 32 |
+| Early-stopping monitor | Validation loss |
+| Patience | 10 epochs without improvement |
+| Restore best weights | Yes, from the lowest validation loss |
+| Architecture selection | Highest validation accuracy after weight restoration |
+
+`LabelEncoder` is fitted on training labels, then used to encode validation and test labels. `to_categorical` converts the encoded labels into five-class one-hot vectors. Predictions are converted from class probabilities to indices with `argmax`, then back to flower names using the same encoder for the classification report.
+
+The selected Keras model is retained directly rather than retrained after selection. No Keras random seed is currently set, so repeated runs can select different architectures and produce different scores. The two implementations share data, but differ in training settings; this is not a controlled comparison of libraries alone.
+
+## Recorded scikit-learn results
+
+The following results come from the earlier scikit-learn run with final `max_iter=1000` and `alpha=0.001`, rather than a new run of the current combined script. No Keras benchmark results have been recorded here yet. The comparison selected `(149,)` with **67.59% validation accuracy**. The final model achieved:
 
 | Test metric | Result |
 |---|---:|
